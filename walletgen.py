@@ -36,6 +36,7 @@ try:
     from bip_utils import (
         Bip39MnemonicGenerator,
         Bip39WordsNum,
+        Bip39MnemonicValidator,
         Bip44,
         Bip44Coins,
         Bip44Changes,
@@ -90,6 +91,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Mnemonic word count",
     )
     parser.add_argument("--account", type=int, default=0, help="Account index (hardened)")
+    parser.add_argument(
+        "--staksszoe",
+        type=str,
+        default=None,
+        help=(
+            "Provide a BIP39 mnemonic (seed phrase) to use instead of generating one. "
+            "Overrides --words and forces --count=1."
+        ),
+    )
     parser.add_argument(
         "--print-mnemonic",
         action="store_true",
@@ -378,6 +388,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     target_btc = args.btc or not (args.btc or args.eth)
     target_eth = args.eth or not (args.btc or args.eth)
 
+    # Validate provided mnemonic if --staksszoe is used
+    if args.staksszoe:
+        provided = args.staksszoe.strip()
+        try:
+            Bip39MnemonicValidator(provided).Validate()
+        except Exception as exc:
+            sys.stderr.write("Invalid BIP39 mnemonic supplied via --staksszoe.\n")
+            return 2
+        if args.count != 1:
+            sys.stderr.write("Note: --staksszoe provided, forcing --count=1.\n")
+
     try:
         known_addresses = load_address_database(args.address_db)
     except Exception as exc:
@@ -386,8 +407,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     overall_results: List[Dict] = []
 
-    for wallet_idx in range(args.count):
-        mnemonic = generate_mnemonic(args.words)
+    num_wallets = 1 if args.staksszoe else args.count
+    for wallet_idx in range(num_wallets):
+        mnemonic = args.staksszoe.strip() if args.staksszoe else generate_mnemonic(args.words)
 
         all_records: List[AddressRecord] = []
         btc_derivations: Optional[Dict[str, List[AddressRecord]]] = None
